@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goit-personal-assistant-cli"
+version = "1.0.0"
+description = "CLI personal assistant: contacts, birthdays, notes and tags"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+personal-assistant = "personal_assistant.cli:main"
+
+[project.urls]
+Repository = "https://github.com/ihomziak-ai-platform-engineer/personal-assistant"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.optional-dependencies]
+dev = ["pycodestyle==2.14.0"]
