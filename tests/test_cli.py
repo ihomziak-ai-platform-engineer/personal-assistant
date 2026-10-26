@@ -112,6 +112,105 @@ class CliTests(unittest.TestCase):
         self.repository.fail = False
         self.execute_ok('delete "Іван"')
 
+    def assert_rejected_without_changes(self, lines):
+        before = to_payload(self.session.data)
+        saves = len(self.repository.saves)
+        for line in lines:
+            with self.subTest(line=line):
+                response = self.session.execute(line)
+                self.assertTrue(response.message.startswith("Помилка:"))
+                self.assertFalse(response.should_exit)
+                self.assertEqual(to_payload(self.session.data), before)
+                self.assertEqual(len(self.repository.saves), saves)
+
+    def test_empty_fields_and_searches_do_not_change_existing_data(self):
+        self.execute_ok('add Alice 0501234567 --email alice@example.com')
+        self.execute_ok('note-add Title Text python')
+        for value in ('""', '"   "'):
+            self.assert_rejected_without_changes([
+                f'add {value} 0671234567',
+                f'add Bob {value}',
+                f'add Bob --email {value}',
+                f'add Bob --address {value}',
+                f'add Bob --birthday {value}',
+                f'rename Alice {value}',
+                f'set-email Alice {value}',
+                f'set-address Alice {value}',
+                f'set-birthday Alice {value}',
+                f'find {value}',
+                f'note-add {value} Text',
+                f'note-add Title {value}',
+                f'note-edit 1 {value} Text',
+                f'note-edit 1 Title {value}',
+                f'note-find {value}',
+                f'tag-add 1 {value}',
+                f'tag-find {value}',
+            ])
+
+    def test_duplicate_contacts_and_phones_do_not_overwrite_data(self):
+        self.execute_ok('add "Alice Brown" 0501234567')
+        self.execute_ok('add "Alice Brown" 0671234567')
+        self.execute_ok('add Bob 0631234567')
+        self.assert_rejected_without_changes([
+            'add "  ALICE   brown  "',
+            'add "alice brown" 0501234567',
+            'add "alice brown" --email other@example.com',
+            'change "Alice Brown" 0501234567 0671234567',
+            'rename "Alice Brown" BOB',
+        ])
+        self.execute_ok('add "alice brown" 0681234567')
+        self.assertEqual(len(self.session.data.contacts), 2)
+        record = self.session.data.contacts.require("Alice Brown")
+        self.assertEqual(len(record.phones), 3)
+
+    def test_duplicate_tags_are_ignored_and_invalid_batches_are_atomic(self):
+        self.execute_ok('note-add Title Text Python #PYTHON')
+        self.execute_ok('tag-add 1 python #Python study STUDY')
+        self.assertEqual(self.session.data.notes.require(1).tags,
+                         {"python", "study"})
+        self.assert_rejected_without_changes([
+            'tag-add 1 new "bad tag"',
+            'note-add New Text valid "bad tag"',
+            'note-edit 1 Changed ""',
+            'tag-remove 1 missing',
+        ])
+        self.execute_ok('note-add New Text')
+        self.assertEqual(self.session.data.notes.require(2).title, "New")
+
+    def test_repeated_deletion_preserves_other_records(self):
+        self.execute_ok('add Alice 0501234567')
+        self.execute_ok('add Bob 0671234567')
+        self.execute_ok('note-add First Text')
+        self.execute_ok('note-add Second Text')
+        self.execute_ok('delete Alice')
+        self.execute_ok('note-delete 1')
+        self.execute_ok('remove-phone Bob 0671234567')
+        self.assert_rejected_without_changes([
+            'delete Alice', 'note-delete 1', 'remove-phone Bob 0671234567',
+        ])
+        self.assertEqual(len(self.session.data.contacts), 1)
+        self.assertEqual(self.session.data.notes.require(2).title, "Second")
+
+    def test_missing_arguments_and_invalid_ids_allow_next_command(self):
+        self.execute_ok('note-add Title Text')
+        self.assert_rejected_without_changes([
+            'add', 'show', 'change', 'rename', 'set-email', 'clear-field',
+            'find', 'note-add', 'note-edit', 'note-delete', 'tag-add',
+            'tag-remove', 'tag-find', 'note-show -1', 'note-show 1.5',
+            'note-show 999999999999999999999999', 'help absent',
+            'note-edit 999 New Text', 'clear-field Missing email',
+        ])
+        self.execute_ok('note-edit 1 Updated Text')
+        self.assertEqual(self.session.data.notes.require(1).title, "Updated")
+
+    def test_blank_lines_do_not_save_or_exit(self):
+        for line in ('', ' ', '\t', '  \t  '):
+            with self.subTest(line=line):
+                response = self.session.execute(line)
+                self.assertEqual(response.message, "")
+                self.assertFalse(response.should_exit)
+        self.assertEqual(self.repository.saves, [])
+
     def test_reads_and_exit_do_not_rewrite_disk(self):
         for line in ("", "hello", "help", "help add", "all", "notes", "exit"):
             self.execute_ok(line)

@@ -76,3 +76,19 @@ class FieldTests(unittest.TestCase):
         phone = Phone("0501234567")
         with self.assertRaises(AttributeError):
             phone.value = "bad"
+
+    def test_text_field_length_boundaries(self):
+        for field, maximum in ((Name, 100), (Address, 300), (Tag, 50)):
+            with self.subTest(field=field.__name__):
+                self.assertEqual(field("x" * maximum).value, "x" * maximum)
+                with self.assertRaises(ValueError):
+                    field("x" * (maximum + 1))
+
+    def test_email_length_boundaries(self):
+        domain = ".".join(("x" * 63, "y" * 63, "z" * 61))
+        email = "a" * 64 + "@" + domain
+        self.assertEqual(len(email), 254)
+        self.assertEqual(Email(email).value, email)
+        for value in (email + "z", "a" * 65 + "@example.com"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                Email(value)

@@ -1,0 +1,51 @@
+name: Checks
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python: "3.10"
+          - os: ubuntu-latest
+            python: "3.12"
+          - os: ubuntu-latest
+            python: "3.13"
+          - os: macos-latest
+            python: "3.12"
+          - os: windows-latest
+            python: "3.12"
+    runs-on: ${{ matrix.os }}
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Create source archive from committed files
+        run: >-
+          git archive --format=zip --prefix=personal-assistant/
+          --output="${{ runner.temp }}/personal-assistant.zip" HEAD
+      - name: Extract archive
+        run: >-
+          python -m zipfile -e "${{ runner.temp }}/personal-assistant.zip"
+          "${{ runner.temp }}/source"
+      - name: Install package and style checker from archive
+        working-directory: ${{ runner.temp }}
+        run: python -m pip install "./source/personal-assistant[dev]"
+      - name: Check PEP 8
+        working-directory: ${{ runner.temp }}/source/personal-assistant
+        run: python -m pycodestyle src tests
+      - name: Run archived tests against installed package
+        working-directory: ${{ runner.temp }}
+        run: python -m unittest discover -s source/personal-assistant/tests -v
+      - name: Check installed command
+        working-directory: ${{ runner.temp }}
+        run: personal-assistant --version

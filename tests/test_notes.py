@@ -68,3 +68,19 @@ class NoteTests(unittest.TestCase):
         for value in (-1, 99, True):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 self.book.require(value)
+
+    def test_identical_notes_have_distinct_ids(self):
+        first = self.book.add("Title", "Text", ["python"])
+        second = self.book.add("Title", "Text", ["python"])
+        self.assertNotEqual(first.id, second.id)
+        self.book.delete(first.id)
+        self.assertEqual(self.book.sorted_notes(), [second])
+
+    def test_title_and_text_length_boundaries(self):
+        note = self.book.add("t" * 120, "x" * 10000)
+        for title, text in (("t" * 121, "Text"), ("Title", "x" * 10001)):
+            with self.subTest(title_length=len(title), text_length=len(text)):
+                with self.assertRaises(ValueError):
+                    note.edit(title, text)
+                self.assertEqual(note.title, "t" * 120)
+                self.assertEqual(note.text, "x" * 10000)

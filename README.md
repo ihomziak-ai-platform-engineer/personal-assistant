@@ -25,6 +25,10 @@ git clone https://github.com/ihomziak-ai-platform-engineer/personal-assistant.gi
 cd personal-assistant
 ```
 
+For a ZIP download, open the extracted directory that contains both
+`pyproject.toml` and `tests/`. GitHub may name this directory
+`personal-assistant-main`.
+
 ### macOS and Linux
 
 ```bash
@@ -119,6 +123,10 @@ For an existing contact, `add` accepts only an additional phone number. Use
 creating a contact, options may appear in any order after the name and
 optional phone number.
 
+Names are matched without regard to case or repeated spaces. Adding an
+existing phone number reports an error and keeps the contact unchanged.
+Renaming a contact to another contact's name is also rejected.
+
 ### Birthday rules
 
 - N must be an integer from 0 to 366; the default is 7.
@@ -148,6 +156,10 @@ Tags are case-insensitive: `Python`, `python` and `#PYTHON` refer to the same
 tag. A note with multiple tags appears in each matching group. Notes without
 tags appear in the last group. Notes within each group are ordered by ID.
 Deleted IDs are not reused, including after a restart.
+
+Notes may have identical titles and text; each gets its own ID. Adding a tag
+that is already present leaves a single copy of that tag. A command with an
+invalid title, text or tag leaves the existing note unchanged.
 
 ## General commands
 
@@ -223,7 +235,10 @@ files created by this application; do not load untrusted pickle files.
 | `src/personal_assistant/storage.py` | Serialization, file writes and locking |
 | `src/personal_assistant/commands.py` | Command handlers and argument validation |
 | `src/personal_assistant/cli.py` | Input parsing, the interactive loop and session state |
-| `tests/` | Tests for models, commands and storage |
+| `src/personal_assistant/__main__.py` | Entry point for `python -m personal_assistant` |
+| `pyproject.toml` | Package metadata, build settings and the console entry point |
+| `tests/` | Model, command, storage and installed CLI tests |
+| `.github/workflows/ci.yml` | Archive, installation and test checks on GitHub Actions |
 
 Field types inherit from `Field`; contact and note books extend `UserDict`.
 A contact contains its validated fields, and `AssistantData` contains both
@@ -237,13 +252,63 @@ Install the package in editable mode with the style checker:
 python -m pip install -e ".[dev]"
 ```
 
-Run tests and check formatting from the repository root:
+Run tests and check formatting from the repository root. Keep the virtual
+environment active; the installation tests use its `personal-assistant`
+executable:
 
 ```bash
 python -m unittest discover -s tests -v
 python -m pycodestyle src tests
 ```
 
-GitHub Actions runs these checks on Linux with Python 3.10, 3.12 and 3.13,
-and on macOS and Windows with Python 3.12. It also checks that the installed
-command runs from outside the project directory.
+The suite contains 74 tests and uses Python's built-in `unittest` module.
+It creates temporary data directories and does not use your contact book.
+
+| Test file | Coverage |
+| --- | --- |
+| `tests/test_fields.py` | Formats, empty values, Unicode digits and length limits |
+| `tests/test_contacts.py` | Contact changes, duplicate names and phones, search and birthday boundaries |
+| `tests/test_notes.py` | Note changes, duplicate content, tags and permanent IDs |
+| `tests/test_storage.py` | Restarts, corrupt files, size limits, write failures and locking |
+| `tests/test_cli.py` | Commands, missing arguments, invalid input, duplicate additions and unchanged state after errors |
+| `tests/test_installation.py` | Installed executable, recovery after errors, persistence and the README quick-start example |
+
+### Source ZIP
+
+Use GitHub's **Code > Download ZIP** to download the current branch, including
+`tests/`. To archive a committed revision from a local clone, run:
+
+```bash
+git archive --format=zip --prefix=personal-assistant/ --output=../personal-assistant.zip HEAD
+python -m zipfile -l ../personal-assistant.zip
+```
+
+The listing must include `README.md`, `pyproject.toml`, `src/` and all six
+`tests/test_*.py` files. `git archive` includes committed files only; commit
+any intended changes before creating the archive. Submit the source ZIP;
+the installable wheel contains the application without the test suite.
+
+### Clean installation check
+
+Extract the source ZIP into a new directory and repeat the installation
+steps above using a new virtual environment. From that extracted project,
+install the development dependencies and run:
+
+```bash
+python -m pip install ".[dev]"
+python -m unittest discover -s tests -v
+python -m pycodestyle src tests
+cd ..
+personal-assistant --version
+personal-assistant --data-dir ./demo-data
+```
+
+Add a contact and a note, enter `exit`, then run the last command again and
+check `all` and `notes`. The installation tests also exercise this workflow
+with temporary data and check that invalid input does not terminate the CLI.
+
+GitHub Actions creates a source ZIP from each checked revision, extracts it,
+installs that copy and runs its tests from outside the project directory.
+The matrix covers Linux with Python 3.10, 3.12 and 3.13, and macOS and Windows
+with Python 3.12. Missing tests or a broken installation cause the workflow
+to fail.

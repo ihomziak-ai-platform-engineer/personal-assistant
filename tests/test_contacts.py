@@ -51,6 +51,13 @@ class ContactTests(unittest.TestCase):
         self.assertEqual(len(self.book), 2)
         self.assertIs(self.book.find("Іван Петренко"), self.record)
 
+    def test_case_only_rename_preserves_contact_details(self):
+        self.book.rename("Іван Петренко", "  ІВАН   ПЕТРЕНКО  ")
+        self.assertEqual(len(self.book), 1)
+        self.assertIs(self.book.find("Іван Петренко"), self.record)
+        self.assertEqual(str(self.record.name), "ІВАН ПЕТРЕНКО")
+        self.assertEqual(str(self.record.email), "ivan@example.com")
+
     def test_search_every_field_and_case(self):
         for field, query in (
             ("name", "ІВАН"), ("phone", "50123"), ("email", "EXAMPLE"),
